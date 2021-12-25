@@ -94,6 +94,11 @@ init([SigFun, ECDHFun]) ->
     JsonRpcPort = application:get_env(miner, jsonrpc_port, 4467),
     JsonRpcIp = application:get_env(miner, jsonrpc_ip, {127,0,0,1}),
 
+    Telemetry = case application:get_env(miner, telemetry, false) of
+                    true -> [?WORKER(miner_telemetry, [])];
+                    _ -> []
+                end,
+
     ChildSpecs =
         [
          ?WORKER(miner_hbbft_sidecar, []),
@@ -104,7 +109,8 @@ init([SigFun, ECDHFun]) ->
          ] ++
         ValServers ++
         EbusServer ++
-        OnionServer,
+        OnionServer ++
+        Telemetry,
     {ok, {SupFlags, ChildSpecs}}.
 
 
