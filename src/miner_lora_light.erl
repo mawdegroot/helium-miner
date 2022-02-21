@@ -241,7 +241,7 @@ handle_info({blockchain_event, {new_chain, NC}}, State) ->
 handle_info(
     {blockchain_event, {add_block, _BlockHash, _Sync, Ledger} = _Event},
     #state{cur_poc_challenger_type = CurPoCChallengerType} = State
-)->
+) ->
     case blockchain:config(?poc_challenger_type, Ledger) of
         {ok, V} when V /= CurPoCChallengerType ->
             %% the poc challenger chain var has been modified, force this server
