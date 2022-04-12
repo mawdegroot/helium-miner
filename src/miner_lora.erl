@@ -10,8 +10,7 @@
     port/0,
     position/0,
     location_ok/0,
-    region/0,
-    route/1
+    region/0
 ]).
 
 -export([
@@ -97,8 +96,11 @@
 -define(MAX_TMST_VAL, 4294967295).
 
 -ifdef(TEST).
+-export([route/1]).
+-define(route(Pkt), ?MODULE:route(Pkt)).
 -define(REG_DOMAIN_TIMEOUT, 1000).
 -else.
+-define(route(Pkt), route(Pkt)).
 -define(REG_DOMAIN_TIMEOUT, 30000).
 -endif.
 
@@ -147,19 +149,6 @@ position() ->
 
 -spec location_ok() -> true | false.
 location_ok() ->
-    %% the below code is tested and working.  we're going to roll
-    %% out the metadata update so app users can see their status
-    %% case position() of
-    %%     {error, _Error} ->
-    %%         lager:debug("pos err ~p", [_Error]),
-    %%         false;
-    %%     {ok, _} ->
-    %%         true;
-    %%     %% fix but too far from assert
-    %%     {ok, _, _} ->
-    %%         false
-    %% end.
-
     %% this terrible thing is to fake out dialyzer
     application:get_env(miner, loc_ok_default, true).
 
@@ -629,7 +618,7 @@ handle_packets(_Packets, _Gateway, _RxInstantLocal_us, #state{reg_domain_confirm
     State;
 handle_packets([Packet|Tail], Gateway, RxInstantLocal_us, #state{reg_region = Region, chain = Chain} = State) ->
     Data = base64:decode(maps:get(<<"data">>, Packet)),
-    case ?MODULE:route(Data) of
+    case ?route(Data) of
         error ->
             ok;
         {onion, Payload} ->
