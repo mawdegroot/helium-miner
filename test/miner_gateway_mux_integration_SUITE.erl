@@ -24,16 +24,25 @@ all() ->
      mux_packet_routing_light
     ].
 
-init_per_testcase(TestCase, Config) ->
+init_per_testcase(TestCase, Config0) ->
     ok = application:load(miner),
     ok = application:set_env(miner, radio_device, {{127, 0, 0, 1}, 1680, deprecated, deprecated}),
     ok = application:set_env(miner, mode, gateway),
     ok = application:set_env(miner, gateway_and_mux_enable, true),
     case TestCase of
-        mux_packet_routing_light -> application:set_env(miner, gateways_run_chain, false);
-        _ -> ok
+        mux_packet_routing_light -> ok = application:set_env(miner, gateways_run_chain, false);
+        _ -> ok = application:set_env(miner, gateways_run_chain, true)
     end,
     application:ensure_all_started(miner),
+
+    Config = miner_ct_utils:init_per_testcase(?MODULE, TestCase, Config0),
+    Miners = ?config(miners, Config),
+
+    ?assert(is_pid(whereis(blockchain_worker))),
+    Thing = ct_rpc:call(hd(Miners), blockchain_worker, blockchain, [], 5000),
+    ct:pal("Thing is ~p", [Thing]),
+    %% ok = miner_ct_utils:wait_for_gte(height, Miners, 2),
+
     Config.
 
 end_per_testcase(_TestCase, Config) ->
@@ -190,7 +199,7 @@ mux_packet_routing_light(Config) ->
 
     receive
         {packet_received, PacketType} -> ?assert(PacketType =:= udp_skipped)
-    after 5000 ->
+    after 2000 ->
         ct:fail("no udp packets received")
     end,
 
@@ -212,7 +221,7 @@ mux_packet_routing_light(Config) ->
 
     receive
         {packet_received, PacketType2} -> ?assert(PacketType2 =:= longfi_routed)
-    after 5000 ->
+    after 2000 ->
         ct:fail("no poc packets received")
     end,
 
@@ -221,7 +230,7 @@ mux_packet_routing_light(Config) ->
 
     receive
         {packet_received, PacketType3} -> ?assert(PacketType3 =:= lora_skipped)
-    after 5000 ->
+    after 2000 ->
         ct:fail("no lora packets received")
     end,
 
