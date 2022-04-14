@@ -38,7 +38,6 @@ init_per_testcase(TestCase, Config0) ->
     Config = miner_ct_utils:init_per_testcase(?MODULE, TestCase, Config0),
     Miners = ?config(miners, Config),
 
-    ?assert(is_pid(whereis(blockchain_worker))),
     Thing = ct_rpc:call(hd(Miners), blockchain_worker, blockchain, [], 5000),
     ct:pal("Thing is ~p", [Thing]),
     %% ok = miner_ct_utils:wait_for_gte(height, Miners, 2),
@@ -92,8 +91,8 @@ gateway_grpc_reconnect_test(_Config) ->
     ok.
 
 mux_packet_routing(Config) ->
-    BaseDir = ?config(base_dir, Config),
-    Ledger = blockchain_ledger_v1:new(BaseDir),
+    %% BaseDir = ?config(base_dir, Config),
+    %% Ledger = blockchain_ledger_v1:new(BaseDir),
 
     application:ensure_all_started(meck),
     Parent = self(),
@@ -114,6 +113,11 @@ mux_packet_routing(Config) ->
         {noop, non_longfi}
     end),
     ?assert(is_pid(whereis(miner_mux_port))),
+
+    Miner = hd(?config(miners, Config)),
+    Chain = ct_rpc:call(Miner, blockchain_worker, blockchain, [], 5000),
+    Ledger = ct_rpc:call(Miner, blockchain, ledger, [Chain], 5000),
+    ct:pal("Chain ~p", [Chain]),
 
     {ok, RadioPid} = miner_fake_radio_backplane:start_link(11, 6666, [{1680, 16#821fb7fffffffff}]),
 
