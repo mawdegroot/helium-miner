@@ -5,6 +5,8 @@
 -include_lib("public_key/include/public_key.hrl").
 
 -export([
+    %% init_per_suite/1,
+    %% end_per_suite/1,
     init_per_testcase/2,
     end_per_testcase/2,
     all/0
@@ -24,6 +26,12 @@ all() ->
      mux_packet_routing_light
     ].
 
+%% init_per_suite(Config) ->
+%%     Config.
+
+%% end_per_suite(Config) ->
+%%     Config.
+
 init_per_testcase(TestCase, Config0) ->
     ok = application:load(miner),
     ok = application:set_env(miner, radio_device, {{127, 0, 0, 1}, 1680, deprecated, deprecated}),
@@ -38,9 +46,7 @@ init_per_testcase(TestCase, Config0) ->
     Config = miner_ct_utils:init_per_testcase(?MODULE, TestCase, Config0),
     Miners = ?config(miners, Config),
 
-    Thing = ct_rpc:call(hd(Miners), blockchain_worker, blockchain, [], 5000),
-    ct:pal("Thing is ~p", [Thing]),
-    %% ok = miner_ct_utils:wait_for_gte(height, Miners, 2),
+    ok = miner_ct_utils:wait_for_gte(height, Miners, 2),
 
     Config.
 
