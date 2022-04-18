@@ -3,10 +3,9 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("public_key/include/public_key.hrl").
+-include_lib("blockchain/include/blockchain_vars.hrl").
 
 -export([
-    %% init_per_suite/1,
-    %% end_per_suite/1,
     init_per_testcase/2,
     end_per_testcase/2,
     all/0
@@ -26,34 +25,47 @@ all() ->
      mux_packet_routing_light
     ].
 
-%% init_per_suite(Config) ->
-%%     Config.
-
-%% end_per_suite(Config) ->
-%%     Config.
-
 init_per_testcase(TestCase, Config0) ->
-    ok = application:load(miner),
-    ok = application:set_env(miner, radio_device, {{127, 0, 0, 1}, 1680, deprecated, deprecated}),
-    ok = application:set_env(miner, mode, gateway),
-    ok = application:set_env(miner, gateway_and_mux_enable, true),
-    case TestCase of
-        mux_packet_routing_light -> ok = application:set_env(miner, gateways_run_chain, false);
-        _ -> ok = application:set_env(miner, gateways_run_chain, true)
-    end,
-    application:ensure_all_started(miner),
+    SuiteConfig = [ {split_miners_vals_and_gateways, true},
+                    {num_validators, 10},
+                    {num_gateways, 6},
+                    {num_consensus_members, 4},
+                    {gateway_and_mux_enable, true},
+                    {default_keys, true} ],
+    Config =
+        case TestCase of
+            mux_packet_routing_light -> [{gateways_run_chain, false}] ++ SuiteConfig ++ Config0;
+            _ -> SuiteConfig ++ Config0
+        end,
 
-    Config = miner_ct_utils:init_per_testcase(?MODULE, TestCase, Config0),
-    Miners = ?config(miners, Config),
+    Config1 = miner_ct_utils:init_per_testcase(?MODULE, TestCase, Config),
+    Miners = ?config(miners, Config1),
+    Addresses = ?config(addresses, Config1),
+    InitialCoinbaseTxns = [ blockchain_txn_coinbase_v1:new(Addr, 5000) || Addr <- Addresses],
+    AddGwTxns = [blockchain_txn_gen_gateway_v1:new(Addr, Addr, h3:from_geo({37.780586, -122.469470}, 13), 0)
+                 || Addr <- Addresses],
+    NumConsensusMembers = ?config(num_consensus_members, Config1),
+    BlockTime = ?config(block_time, Config1),
+    Interval = 5,
+    BatchSize = ?config(batch_size, Config1),
+    Curve = ?config(dkg_curve, Config1),
+    Keys = libp2p_crypto:generate_keys(ecc_compact),
+    InitialVars = miner_ct_utils:make_vars(Keys, #{?block_time => BlockTime,
+                                                   ?election_interval => Interval,
+                                                   ?num_consensus_members => NumConsensusMembers,
+                                                   ?batch_size => BatchSize,
+                                                   ?dkg_curve => Curve}),
+    {ok, DKGCompletedNodes} = miner_ct_utils:initial_dkg(Miners, InitialVars ++ InitialCoinbaseTxns ++ AddGwTxns,
+                                             Addresses, NumConsensusMembers, Curve),
+    _GenesisLoadResults = miner_ct_utils:integrate_genesis_block(hd(DKGCompletedNodes), Miners -- DKGCompletedNodes),
+    ok = miner_ct_utils:wait_for_in_consensus(Miners, NumConsensusMembers),
 
     ok = miner_ct_utils:wait_for_gte(height, Miners, 2),
 
-    Config.
+    Config1.
 
 end_per_testcase(_TestCase, Config) ->
-    application:stop(miner),
-    application:unload(miner),
-    Config.
+    miner_ct_utils:end_per_testcase(_TestCase, Config).
 
 gateway_signing_test(_Config) ->
     {ok, BaseDir} = application:get_env(blockchain, base_dir),
